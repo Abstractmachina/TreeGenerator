@@ -10,6 +10,7 @@ using Rhino.Geometry;
 namespace TreeGenerator
 {
     //test
+    //this is another test
     public class TreeGeneratorComponent : GH_Component
     {
         public TreeGeneratorComponent()
