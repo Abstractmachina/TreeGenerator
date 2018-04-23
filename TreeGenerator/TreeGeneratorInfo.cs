@@ -26,7 +26,7 @@ namespace TreeGenerator
             get
             {
                 //Return a short string describing the purpose of this GHA library.
-                return "this is a test.";
+                return "Generate an agent-based tree.";
             }
         }
         public override Guid Id
@@ -42,7 +42,7 @@ namespace TreeGenerator
             get
             {
                 //Return a string identifying you or your company.
-                return "its me";
+                return "Taole Chen";
             }
         }
         public override string AuthorContact
