@@ -16,7 +16,7 @@ namespace TreeGenerator
         public JointExtractor()
           : base("Joint Extractor", "JoiE",
               "Extracts joints from a branching structure.",
-              "Generative", "Agent-based")
+              "Generative", "Fabrication")
         {
         }
 
