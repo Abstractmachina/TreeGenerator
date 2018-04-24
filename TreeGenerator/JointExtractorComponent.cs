@@ -38,6 +38,8 @@ namespace TreeGenerator
 
             pManager.AddPlaneParameter("Untrimmed Joints", "UT", "Returns all joints as untrimmed list of joints.", GH_ParamAccess.tree);
             pManager.AddPlaneParameter("Trimmed Joints", "TT", "Returns all joints based on trim specifications.", GH_ParamAccess.tree);
+            pManager.AddPlaneParameter("Stems", "S", "Returns stems based on trim specifications", GH_ParamAccess.tree);
+            
 
             pManager.AddTextParameter("Debug Log", "DEBUG", "Debug Log for development.", GH_ParamAccess.list);
         }
@@ -48,51 +50,65 @@ namespace TreeGenerator
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess DA)
         {
+            //input
             GH_Structure<GH_Plane> planes = new GH_Structure<GH_Plane>();
-            int trimLengthBase = 5;
-            int trimLengthTop = 5;
-
+            double t1 = 0;
+            double t2 = 0;
 
             if (!DA.GetDataTree(0, out planes)) return;
-            if (!DA.GetData<int>(1, ref trimLengthBase)) return;
-            if (!DA.GetData<int>(2, ref trimLengthTop)) return;
+            if (!DA.GetData(1, ref t1)) return;
+            if (!DA.GetData(2, ref t2)) return;
+
+            int trimLengthBase = (int)t1;
+            int trimLengthTop = (int)t2;
+
+            //find joints
+            List<List<List<GH_Plane>>> jointsList = ExtractJoints(planes, trimLengthTop);
+
+            //trim joints
+            List<List<List<GH_Plane>>> trimmedJointsList = TrimJoints(jointsList, trimLengthBase, trimLengthTop);
+
+            //find stems
+            GH_Structure<GH_Plane> stems = ExtractStems(planes, trimLengthBase, trimLengthTop);
+
+            //convert to datatree
+            GH_Structure<GH_Plane> untrimmedJointsTree = ConvertListToTree(jointsList);
+            GH_Structure<GH_Plane> trimmedJointsTree = ConvertListToTree(trimmedJointsList);
+
+            //output
+            DA.SetDataTree(0, untrimmedJointsTree);
+            DA.SetDataTree(1, trimmedJointsTree);
+            DA.SetDataTree(2, stems);
+        }
 
 
-            GH_Structure<GH_Plane> joints = new GH_Structure<GH_Plane>();
 
-            List<List<List<Plane>>> jointsList = new List<List<List<Plane>>>(); //3dimensional list to preserve data structure.
-                                                                                //datatree cant do it. why??
-                                                                                //datatree is a sortedList. uses key-value pairs for indexing.
-                                                                                //ie its only 2 dimensional.
-
-
-            int jointCount = 0;
+        /// <summary>
+        /// Extract joints from a tree structure with a flat hierarchy. 
+        /// </summary>
+        /// <param name="planes"></param>
+        /// <param name="trimLengthTop"></param>
+        /// <returns></returns>
+        private List<List<List<GH_Plane>>> ExtractJoints(GH_Structure<GH_Plane> planes, int trimLengthTop)
+        {
+            List<List<List<GH_Plane>>> jointsList = new List<List<List<GH_Plane>>>(); //3dimensional list to preserve data structure internally
 
             for (int i = 0; i < planes.PathCount; i++)
             {
-                //List<List<Plane>> members = new List<List<Plane>>(); //stores members
+                List<List<GH_Plane>> members = new List<List<GH_Plane>>(); //stores members
 
                 //add first member to tree
-
-                //for (int j=0;j<planes.get_Branch(i).Count; j++)
-                //{
-                //    Plane p = new Plane();
-                //    planes.get_DataItem(new GH_Path(i), j).CastTo<Plane>(out p);
-
-                //}
-                List<GH_Plane> member0 = planes.get_Branch(i).;
-                int[] pathDimensions = new int[2];
-                GH_Path path = new GH_Path(pathDimensions[0])
+                List<GH_Plane> member0 = planes.get_Branch(i) as List<GH_Plane>; //cast from Ilist to list
                 members.Add(member0);
 
-
-                for (int j = 0; j < planes.BranchCount; j++)
+                for (int j = 0; j < planes.PathCount; j++)
                 {
                     if (j != i) //if its not the same branch
                     {
                         //check whether last plane of branch i is the same as first plane of branch j
-                        List<Plane> otherMember = planes.Branch(j);
-                        Vector3d distVector = (Vector3d)member0[member0.Count - 1].Origin - (Vector3d)otherMember[0].Origin;
+                        int[] ind = { i, j };
+                        List<GH_Plane> otherMember = planes.get_Branch(j) as List<GH_Plane>;
+                        Vector3d distVector = (Vector3d)member0[member0.Count - 1].Value.Origin - (Vector3d)otherMember[0].Value.Origin;
                         double dist = distVector.Length;
                         if (dist < 0.01)
                         {
@@ -102,75 +118,57 @@ namespace TreeGenerator
                     }
                 }
 
-
-                if (members.Count > 1)
+                if (members.Count > 1) //if joint is actually a joint that has more than just a base
                 {
-
                     //check if members have enough planes.
                     //e.g. if a member has only 1 plane, it is not enough to build a joint.
                     bool enoughPlanes = true;
                     for (int k = 0; k < members.Count; k++)
                     {
-                        if (members[k].Count < trimLengthChild)
+                        if (members[k].Count < trimLengthTop)
                         {
                             enoughPlanes = false;
                             break;
                         }
                     }
-
-
-                    if (enoughPlanes)
-                    {
-                        jointsList.Add(members);
-                        for (int k = 0; k < members.Count; k++)
-                        {
-                            GH_Path jointPth = new GH_Path(jointCount, k);
-
-                            joints.AddRange(members[k], jointPth);
-                        }
-                        jointCount++;
-                    }
+                    if (enoughPlanes) jointsList.Add(members);
                 }
             }
+            return jointsList;
+        }
 
-            /*
-            for (int i = 0; i < jointsList.Count; i++)
-            {
-              for (int j = 0; j < jointsList[i].Count; j++)
-              {
-                Print("joint " + i + ", member " + j + ", number of items: " + jointsList[i][j].Count.ToString());
-              }
-            }
-
-          */
-
-            //trim joints
-            //joint< Member<Planes> >
-
-            //method 2
-            List<List<List<Plane>>> trimmedJointsList = new List<List<List<Plane>>>();
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="jointsList"></param>
+        /// <param name="trimLengthBase"></param>
+        /// <param name="trimLengthTop"></param>
+        /// <returns></returns>
+        private List<List<List<GH_Plane>>> TrimJoints(List<List<List<GH_Plane>>> jointsList, int trimLengthBase, int trimLengthTop)
+        {
+            List<List<List<GH_Plane>>> trimmedJointsList = new List<List<List<GH_Plane>>>();
 
             for (int i = 0; i < jointsList.Count; i++)
             {
-                List<List<Plane>> trimmedJoint = new List<List<Plane>>();
+                List<List<GH_Plane>> trimmedJoint = new List<List<GH_Plane>>();
 
                 for (int j = 0; j < jointsList[i].Count; j++)
                 {
 
-                    List<Plane> trimmedMember = new List<Plane>();
+                    List<GH_Plane> trimmedMember = new List<GH_Plane>();
                     if (j == 0)
                     {
-                        for (int k = (jointsList[i][j].Count - trimLengthParent); k < jointsList[i][j].Count; k++)
+                        for (int k = (jointsList[i][j].Count - trimLengthBase); k < jointsList[i][j].Count; k++)
                         {
-                            Plane p = jointsList[i][j][k];
+                            GH_Plane p = jointsList[i][j][k];
                             trimmedMember.Add(p);
                         }
                     }
                     else
                     {
-                        for (int k = 0; k < trimLengthChild; k++)
+                        for (int k = 0; k < trimLengthTop; k++)
                         {
-                            Plane p = jointsList[i][j][k];
+                            GH_Plane p = jointsList[i][j][k];
                             trimmedMember.Add(p);
                         }
                     }
@@ -179,37 +177,86 @@ namespace TreeGenerator
                 trimmedJointsList.Add(trimmedJoint);
             }
 
+            return trimmedJointsList;
+        }
 
-            for (int i = 0; i < trimmedJointsList.Count; i++)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="planes"></param>
+        /// <param name="trimLengthBase"></param>
+        /// <param name="trimLengthTop"></param>
+        /// <returns></returns>
+        private GH_Structure<GH_Plane> ExtractStems(GH_Structure<GH_Plane> planes, int trimLengthBase, int trimLengthTop)
+        {
+            GH_Structure<GH_Plane> stems = new GH_Structure<GH_Plane>();
+            for (int i = 0; i < planes.PathCount; i++)
             {
-                for (int j = 0; j < trimmedJointsList[i].Count; j++)
+                GH_Plane plane = planes.get_DataItem(planes.get_Path(i), 0);
+                List<GH_Plane> stemPlanes = new List<GH_Plane>();
+
+                if (plane.Value.OriginZ == 0)
                 {
-                    Print("joint " + i + ", member " + j + ", number of items: " + trimmedJointsList[i][j].Count.ToString());
+                    for (int j = 0; j < planes.get_Branch(i).Count - trimLengthBase + 1; j++)
+                    {
+                        stemPlanes.Add(planes.get_DataItem(planes.get_Path(i), j));
+                    }
                 }
+                else
+                {
+                    for (int j = trimLengthTop - 1; j < planes.get_Branch(i).Count - trimLengthBase + 1; j++)
+                    {
+
+                        stemPlanes.Add(planes.get_DataItem(planes.get_Path(i), j));
+                    }
+                }
+                GH_Path path = new GH_Path(i);
+                stems.AppendRange(stemPlanes, path);
             }
 
-            //convert to datatree
+            return stems;
+        }
 
-            DataTree<Plane> trimmedJointsTree = new DataTree<Plane>();
-            for (int i = 0; i < trimmedJointsList.Count; i++)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="list"></param>
+        /// <returns></returns>
+        private GH_Structure<GH_Plane> ConvertListToTree(List<List<List<GH_Plane>>> list)
+        {
+            GH_Structure<GH_Plane> tree = new GH_Structure<GH_Plane>();
+            for (int i = 0; i < list.Count; i++)
             {
-                for (int j = 0; j < trimmedJointsList[i].Count; j++)
+                for (int j = 0; j < list[i].Count; j++)
                 {
                     GH_Path pth = new GH_Path(i, j);
-                    trimmedJointsTree.AddRange(trimmedJointsList[i][j], pth);
+                    tree.AppendRange(list[i][j], pth);
                 }
             }
-
-
-            //Print(jointsList.Count.ToString());
-            //Print(jointsList[0].Count.ToString());
-            //Print(joints.BranchCount.ToString());
-            //Print(joints.Branch(0).Count.ToString());
-
-            A = joints;
-            B = trimmedJointsTree;
-
+            return tree;
         }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="planes"></param>
+        /// <returns></returns>
+        private int GetBranchCount(GH_Structure<GH_Plane> planes)
+        {
+            int currentBranch = 0;
+            int branchSize = 1;
+            foreach (GH_Path path in planes.Paths)
+            {
+                if (path[0] != currentBranch)
+                {
+                    branchSize++;
+                    currentBranch = path[0];
+                }
+            }
+            return branchSize;
+        }
+
+
 
         /// <summary>
         /// Provides an Icon for the component.
