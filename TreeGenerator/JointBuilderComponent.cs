@@ -56,18 +56,18 @@ namespace TreeGenerator
             GH_Structure<GH_Plane> layers = new GH_Structure<GH_Plane>();
             for (int h = 0; h < mainBranchCount; h++)
             {
-                List<Plane> layerPlanes = new List<Plane>();
+                List<GH_Plane> layerPlanes = new List<GH_Plane>();
 
                 for (int i = 0; i < N; i++)
                 {
-                    Plane p = inputPlanes.get_Branch(new GH_Path(h, 0))[0];
-                    Vector3d move = p.ZAxis * H * i;
-                    p.Translate(move);
+                    GH_Plane p = inputPlanes.get_DataItem(new GH_Path(h, 0), 0);
+                    Vector3d move = p.Value.ZAxis * height * i;
+                    p.Value.Translate(move);
                     layerPlanes.Add(p);
                 }
-                layers.AddRange(layerPlanes, new GH_Path(h));
+                layers.AppendRange(layerPlanes, new GH_Path(h));
             }
-            LP = layers;
+            //LP = layers;
 
 
             //calc curves
