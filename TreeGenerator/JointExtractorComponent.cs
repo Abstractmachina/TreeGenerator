@@ -81,8 +81,6 @@ namespace TreeGenerator
             DA.SetDataTree(2, stems);
         }
 
-
-
         /// <summary>
         /// Extract joints from a tree structure with a flat hierarchy. 
         /// </summary>
@@ -234,26 +232,6 @@ namespace TreeGenerator
                 }
             }
             return tree;
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="planes"></param>
-        /// <returns></returns>
-        private int GetBranchCount(GH_Structure<GH_Plane> planes)
-        {
-            int currentBranch = 0;
-            int branchSize = 1;
-            foreach (GH_Path path in planes.Paths)
-            {
-                if (path[0] != currentBranch)
-                {
-                    branchSize++;
-                    currentBranch = path[0];
-                }
-            }
-            return branchSize;
         }
 
 

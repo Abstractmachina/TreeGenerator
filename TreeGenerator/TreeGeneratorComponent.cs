@@ -29,6 +29,15 @@ namespace TreeGenerator
             pManager.AddBooleanParameter("Run", "R2", "Run Simulation.", GH_ParamAccess.item, false);
             pManager.AddNumberParameter("Manual Animation", "M", "Attach a slide for manual animation", GH_ParamAccess.item, 0.0d);
             pManager.AddNumberParameter("Plane Resolution", "PD", "Resolution of planes that describe the structure.", GH_ParamAccess.item, 10d);
+            //    public static int minLifeSpan = 600;
+            //public static int maxLifeSpan = 1000;
+            //public static int numberOfNewChildren = 3;
+            //public static Vector3d lightDir = new Vector3d(0, 0, 0.01f);
+            pManager.AddNumberParameter("Minimum Lifespan", "MinL", "Minimum lifespan of agent", GH_ParamAccess.item, 100d);
+            pManager.AddNumberParameter("Maximum Lifespan", "MAXL", "Maximum lifespan of agent", GH_ParamAccess.item, 200d);
+            pManager.AddNumberParameter("Number of Children", "CH", "Number of new agents that branching generates.", GH_ParamAccess.item, 3d);
+            pManager.AddVectorParameter("Light Direction", "LDIR", "Direction to Light source where tree will grow towards.", GH_ParamAccess.item, new Vector3d(0, 0, 0.1f));
+
 
             // If you want to change properties of certain parameters, 
             // you can use the pManager instance to access them by index:
@@ -64,6 +73,11 @@ namespace TreeGenerator
             if (!DA.GetData(4, ref run)) return;
             if (DA.GetData(5, ref manualAnimDump)) { };
             if (!DA.GetData(6, ref recordFrequency)) return;
+            if (!DA.GetData(7, ref minLifeSpan)) return;
+            if (!DA.GetData(8, ref maxLifeSpan)) return;
+            if (!DA.GetData(9, ref numberOfNewChildren)) return;
+            if (!DA.GetData(10, ref lightDir)) return;
+
             if (manualAnimDump != 0) AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "MANUAL MODE ACTIVE");
 
 
@@ -121,9 +135,9 @@ namespace TreeGenerator
         public static double recordFrequency;
 
         //general simulation variables
-        public static int minLifeSpan = 100;
-        public static int maxLifeSpan = 300;
-        public static int numberOfNewChildren = 3;
+        public static double minLifeSpan = 600;
+        public static double maxLifeSpan = 1000;
+        public static double numberOfNewChildren = 3;
         public static Vector3d lightDir = new Vector3d(0, 0, 0.01f);
         public static double angle; //angle of branching //in degrees
         public static double minGrowthSpeed = 0.2;
@@ -134,7 +148,7 @@ namespace TreeGenerator
         public static double FuseImmuneDistance = 2d;
 
         public static double separationFactor = 0.002f;
-        public static double separationMax = 20f;
+        public static double separationMax = 200d;
         public static double separationMin = 0.001f;
 
         //boundary variables
@@ -158,7 +172,7 @@ namespace TreeGenerator
         {
             //DEBUG RESET
             ResetDebugValues();
-            
+
             sim = new TreeSimulator();
             sim.PlantSeeds(seeds);
         }
@@ -203,7 +217,7 @@ namespace TreeGenerator
                 Vector3d rootVec = new Vector3d(0, 0, 0.5f);
                 foreach (Point3d p in seedPts)
                 {
-                    Agent a = new Agent((Vector3d)p, rootVec, r.Next(minLifeSpan, maxLifeSpan));
+                    Agent a = new Agent((Vector3d)p, rootVec, r.Next((int)minLifeSpan, (int) maxLifeSpan));
                     a.parentId = 0;
                     sim.activeAgents.Add(a);
                     sim.geometry.SavePlane(new Plane((Point3d)a.loc, a.vel), a.id);
@@ -345,7 +359,7 @@ namespace TreeGenerator
                                     fusePoints.Add(fusePoint);
                                 }
                             }
-                            
+
                         }
                     }
                 }
@@ -415,7 +429,7 @@ namespace TreeGenerator
                         {
                             foreach (Vector3d childVec in a.childVecs)
                             {
-                                Agent child = new Agent(a.loc, childVec, r.Next(minLifeSpan, maxLifeSpan));
+                                Agent child = new Agent(a.loc, childVec, r.Next((int) minLifeSpan, (int) maxLifeSpan));
                                 child.parentId = a.id;
                                 geometry.SavePlane(new Plane((Point3d)child.loc, child.vel), child.id);
                                 activeAgents.Add(child);
@@ -440,7 +454,7 @@ namespace TreeGenerator
                 return tempCheck;
             }
 
-           
+
             //END OF CLASS
         }
 
@@ -456,7 +470,7 @@ namespace TreeGenerator
             public GH_Structure<GH_Plane> planes { get; protected set; }
 
             // TODO switch to time-based units
-            
+
             private int currentRecordFrame;
 
 
@@ -532,7 +546,7 @@ namespace TreeGenerator
                 }
             }
 
-            //SETTERS GETTERS
+            //END OF CLASS
         }
 
 
@@ -548,7 +562,7 @@ namespace TreeGenerator
 
             //============= VARIABLES ===================
 
-            
+
             public Vector3d loc;
             public Vector3d vel;
             public Vector3d accel;
@@ -573,14 +587,14 @@ namespace TreeGenerator
 
             //============= CONSTRUCTOR ===================
 
-            public Agent(Vector3d loc_, Vector3d initVec_, int lifeSpan_)
+            public Agent(Vector3d loc_, Vector3d initVec_, double lifeSpan_)
             {
 
                 loc = loc_;
                 vel = initVec_;
                 id = agentCount;
                 agentCount++;
-                lifeSpan = lifeSpan_;
+                lifeSpan = (int) lifeSpan_;
                 childVecs = new List<Vector3d>();
                 growthSpeed = 0.6;
                 agentsCreated++;
@@ -611,12 +625,12 @@ namespace TreeGenerator
                 isDead = true;
                 if (canBranch)
                 {
-                    double angleRad = DegToRad(angle);
+                    double angleRad = Utility.DegToRad(angle);
                     for (int i = 0; i < numberOfNewChildren; i++)
                     {
                         Vector3d childVec = vel; //initVector same as dying parent
                         childVec.Transform(Rhino.Geometry.Transform.Rotation(angleRad, new Vector3d(0, 1, 0), (Point3d)loc)); //rotate in elevation
-                        childVec.Transform(Rhino.Geometry.Transform.Rotation(DegToRad(120) * i, vel, (Point3d)loc)); //rotate in normal randomly
+                        childVec.Transform(Rhino.Geometry.Transform.Rotation(Utility.DegToRad(120) * i, vel, (Point3d)loc)); //rotate in normal randomly
 
                         childVecs.Add(childVec); //add to list of childs
                     }
@@ -669,7 +683,7 @@ namespace TreeGenerator
                 double l = vec.Length;
                 if (l < separationMax && l > separationMin)
                 {
-                    double fallOff = ReMap(l, separationMin, separationMax, 1, 0);
+                    double fallOff = Utility.ReMap(l, separationMin, separationMax, 1, 0);
                     vel += vec * -1 * separationFactor * fallOff;
                 }
             }
@@ -701,18 +715,6 @@ namespace TreeGenerator
             return Pts;
         }
 
-        public static double ReMap(double value, double from1, double to1, double from2, double to2)
-        {
-            return (value - from1) / (to1 - from1) * (to2 - from2) + from2;
-        }
-
-        public static double DegToRad(double dAngle)
-        {
-            double rAngle = dAngle * Math.PI / 180;
-            return rAngle;
-
-        }
-
         public static void ResetDebugValues()
         {
             frameCount = 0;
@@ -724,21 +726,6 @@ namespace TreeGenerator
             boundaryLineOfSight.Clear();
             fusePoints.Clear();
         }
-
-        public static double RandomDouble(double from, double to)
-        {
-            int accuracy = 1000;
-            Random r = new Random();
-            int fromTemp = (int)from * accuracy;
-            int toTemp = (int)to * accuracy;
-            double random = r.Next(fromTemp, toTemp);
-            random *= 1 / accuracy;
-            return random;
-
-        }
-
-
-
         //======================================================================================================================================
         //END OF CUSTOM CODE
 

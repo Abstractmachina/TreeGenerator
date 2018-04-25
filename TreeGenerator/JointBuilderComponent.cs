@@ -34,7 +34,10 @@ namespace TreeGenerator
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
-            
+            pManager.AddCurveParameter("Tree as Curve", "CV", "Returns tree structure as curves", GH_ParamAccess.tree);
+            pManager.AddPlaneParameter("Printing Layers", "L", "Returns planes of printing layers", GH_ParamAccess.tree);
+            pManager.AddPointParameter("Tree | Planes intersection", "CXP", "returns intersection events between tree and printing planes.", GH_ParamAccess.tree);
+
             pManager.AddTextParameter("Debug Log", "BUG", "Debug Log for development", GH_ParamAccess.list);
         }
 
@@ -42,83 +45,121 @@ namespace TreeGenerator
         /// This is the method that actually does the work.
         /// </summary>
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
+        /// 
+        public List<string> debugLog;
         protected override void SolveInstance(IGH_DataAccess DA)
         {
+            debugLog = new List<string>();
+            //input
             GH_Structure<GH_Plane> inputPlanes = new GH_Structure<GH_Plane>();
             double height = 0;
             if (!DA.GetDataTree(0, out inputPlanes)) return;
             if (!DA.GetData(1, ref height)) return;
 
-            //calc layers
-            int mainBranchCount = Utility.GetMainBranchCount(inputPlanes.Paths);
-
-
-            GH_Structure<GH_Plane> layers = new GH_Structure<GH_Plane>();
-            for (int h = 0; h < mainBranchCount; h++)
-            {
-                List<GH_Plane> layerPlanes = new List<GH_Plane>();
-
-                for (int i = 0; i < N; i++)
-                {
-                    GH_Plane p = inputPlanes.get_DataItem(new GH_Path(h, 0), 0);
-                    Vector3d move = p.Value.ZAxis * height * i;
-                    p.Value.Translate(move);
-                    layerPlanes.Add(p);
-                }
-                layers.AppendRange(layerPlanes, new GH_Path(h));
-            }
-            //LP = layers;
-
-
             //calc curves
+            GH_Structure<GH_Curve> curves = BuildStructureAsCurves(inputPlanes);
+            //calc layers
+            GH_Structure<GH_Plane> layers = BuildPrintLayerPlanes(inputPlanes, height);
+            //calc intersections
+            GH_Structure<GH_Point> intersections = CurvePlaneIntersect(layers, curves);
+
+            //output
+            DA.SetDataTree(0, curves);
+            DA.SetDataTree(1, layers);
+            DA.SetDataTree(2, intersections);
+            DA.SetDataList(3, debugLog);
+        }
+
+        /// <summary>
+        /// Returns all intersection events between a set of curves and printing planes. Resulting data tree is sorted by planes.
+        /// </summary>
+        /// <param name="layers"></param>
+        /// <param name="curves"></param>
+        /// <returns></returns>
+        private static GH_Structure<GH_Point> CurvePlaneIntersect(GH_Structure<GH_Plane> layers, GH_Structure<GH_Curve> curves)
+        {
+            GH_Structure<GH_Point> intersections = new GH_Structure<GH_Point>();
+
+            for (int i = 0; i < Utility.GetMainBranchCount(curves.Paths); i++)
+            {
+                int layerCount = 0; //increment per layer for each joint i
+                foreach (GH_Plane plane in layers.get_Branch(i))
+                {
+                    List<GH_Point> xPts = new List<GH_Point>();
+                    for (int j = 0; j < Utility.GetSecondaryBranchCount(curves.Paths, i); j++)
+                    {
+                        foreach (GH_Curve c in curves.get_Branch(new GH_Path(i, j)))
+                        {
+                            var intevents = Rhino.Geometry.Intersect.Intersection.CurvePlane(c.Value, plane.Value, 0.1);
+                            if (intevents != null)
+                            {
+                                for (int k = 0; k < intevents.Count; k++)
+                                {
+                                    var eve = intevents[k];
+                                    GH_Point pt = new GH_Point();
+                                    pt.CastFrom(eve.PointA);
+                                    xPts.Add(pt);
+                                }
+                            }
+                            else xPts.Add(null);
+                        }
+                    }
+                    intersections.AppendRange(xPts, new GH_Path(i, layerCount));
+                    layerCount++;
+                }
+            }
+
+            return intersections;
+        }
+
+        private static GH_Structure<GH_Curve> BuildStructureAsCurves(GH_Structure<GH_Plane> inputPlanes)
+        {
             GH_Structure<GH_Curve> curves = new GH_Structure<GH_Curve>();
 
-            for (int i = 0; i < mainBranchCount; i++)
+            for (int i = 0; i < Utility.GetMainBranchCount(inputPlanes.Paths); i++)
             {
                 int subBranchCount = Utility.GetSecondaryBranchCount(inputPlanes.Paths, i);
                 for (int j = 0; j < subBranchCount; j++)
                 {
                     GH_Path path = new GH_Path(i, j);
                     List<Point3d> cp = new List<Point3d>();
-                    foreach (Plane plane in inputPlanes.Branch(i, j)) cp.Add(plane.Origin);
-                    Curve cv = Curve.CreateInterpolatedCurve(cp, 3);
-                    curves.Add(cv, path);
+                    foreach (GH_Plane plane in inputPlanes.get_Branch(path)) cp.Add(plane.Value.Origin);
+                    GH_Curve cv = new GH_Curve();
+                    cv.CastFrom(Curve.CreateInterpolatedCurve(cp, 3));
+                    curves.Append(cv, path);
                 }
             }
-            //CRV = curves;
 
-
-            //calc intersections
-            GH_Structure<GH_Point> intersections = new GH_Structure<GH_Point>();
-
-
-            for (int i = 0; i < mainBranchCount; i++)
-            {
-                int layerCount = 0;
-                foreach (Plane plane in layers.Branch(i))
-                {
-                    List<Point3d> xPts = new List<Point3d>();
-                    for (int j = 0; j < Utility.GetSecondaryBranchCount(curves.Paths, i); j++)
-                    {
-                        foreach (Curve c in curves.Branch(i, j))
-                        {
-                            var intevents = Rhino.Geometry.Intersect.Intersection.CurvePlane(c, plane, 0.1);
-                            if (intevents != null)
-                            {
-                                for (int k = 0; k < intevents.Count; k++)
-                                {
-                                    var eve = intevents[k];
-                                    xPts.Add(eve.PointA);
-                                }
-                            }
-                        }
-                    }
-                    intersections.AddRange(xPts, new GH_Path(i, layerCount));
-                    layerCount++;
-                }
-            }
-            CXP = intersections;
+            return curves;
         }
+
+        private static GH_Structure<GH_Plane> BuildPrintLayerPlanes(GH_Structure<GH_Plane> inputPlanes, double height)
+        {
+            GH_Structure<GH_Plane> layers = new GH_Structure<GH_Plane>();
+            for (int h = 0; h < Utility.GetMainBranchCount(inputPlanes.Paths); h++)
+            {
+                List<GH_Plane> layerPlanes = new List<GH_Plane>();
+
+                for (int i = 0; i < 100; i++)
+                {
+                    GH_Plane ip = inputPlanes.get_DataItem(new GH_Path(h, 0), 0); ;
+                    Plane p = new Plane();
+                    ip.CastTo<Plane>(out p);
+                    Vector3d move = p.ZAxis * height * i;
+                    p.Translate(move); //cannot translate wit GH_Type.Value as it passes by copy
+                    GH_Plane op = new GH_Plane();
+                    op.CastFrom(p);
+                    layerPlanes.Add(op);
+                }
+                layers.AppendRange(layerPlanes, new GH_Path(h));
+            }
+
+            return layers;
+        }
+
+
+
+
 
         /// <summary>
         /// Provides an Icon for the component.
