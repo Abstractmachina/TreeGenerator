@@ -29,14 +29,15 @@ namespace TreeGenerator
             pManager.AddBooleanParameter("Run", "R2", "Run Simulation.", GH_ParamAccess.item, false);
             pManager.AddNumberParameter("Manual Animation", "M", "Attach a slide for manual animation", GH_ParamAccess.item, 0.0d);
             pManager.AddNumberParameter("Plane Resolution", "PD", "Resolution of planes that describe the structure.", GH_ParamAccess.item, 10d);
-            //    public static int minLifeSpan = 600;
-            //public static int maxLifeSpan = 1000;
-            //public static int numberOfNewChildren = 3;
-            //public static Vector3d lightDir = new Vector3d(0, 0, 0.01f);
+
             pManager.AddNumberParameter("Minimum Lifespan", "MinL", "Minimum lifespan of agent", GH_ParamAccess.item, 100d);
             pManager.AddNumberParameter("Maximum Lifespan", "MAXL", "Maximum lifespan of agent", GH_ParamAccess.item, 200d);
             pManager.AddNumberParameter("Number of Children", "CH", "Number of new agents that branching generates.", GH_ParamAccess.item, 3d);
             pManager.AddVectorParameter("Light Direction", "LDIR", "Direction to Light source where tree will grow towards.", GH_ParamAccess.item, new Vector3d(0, 0, 0.1f));
+
+            pManager.AddNumberParameter("Separation Force Factor", "SEPF", "Modulates strength of separation force between agents.", GH_ParamAccess.item, 0.002d);
+            pManager.AddNumberParameter("Maximum Separation Distance", "MAXS", "Maximum distance that agent repulse each other.", GH_ParamAccess.item, 200d);
+            pManager.AddNumberParameter("Minimum Separation Distance", "MINS", "Minimum distance that agent repulse each other.", GH_ParamAccess.item, 0.001d);
 
 
             // If you want to change properties of certain parameters, 
@@ -73,10 +74,15 @@ namespace TreeGenerator
             if (!DA.GetData(4, ref run)) return;
             if (DA.GetData(5, ref manualAnimDump)) { };
             if (!DA.GetData(6, ref recordFrequency)) return;
+
             if (!DA.GetData(7, ref minLifeSpan)) return;
             if (!DA.GetData(8, ref maxLifeSpan)) return;
             if (!DA.GetData(9, ref numberOfNewChildren)) return;
             if (!DA.GetData(10, ref lightDir)) return;
+
+            if (!DA.GetData(11, ref separationFactor)) return;
+            if (!DA.GetData(12, ref separationMax)) return;
+            if (!DA.GetData(13, ref separationMin)) return;
 
             if (manualAnimDump != 0) AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "MANUAL MODE ACTIVE");
 
@@ -141,7 +147,7 @@ namespace TreeGenerator
         public static Vector3d lightDir = new Vector3d(0, 0, 0.01f);
         public static double angle; //angle of branching //in degrees
         public static double minGrowthSpeed = 0.2;
-        public static double maxGrowthSpeed = 0.6;
+        public static double maxGrowthSpeed = 1;
         public static double fuseAlignThreshold = 4d; //in modelspace units
         public static double fuseThreshold = 0.1; //in modelspace units
         public static double fuseFactor = 0.4;
@@ -153,7 +159,7 @@ namespace TreeGenerator
 
         //boundary variables
         public static Mesh boundary;
-        public static double collisionTriggerDistance = 0.35;
+        public static double collisionTriggerDistance = 5;
 
         //DEBUG MODE
         public static int fuseCount;
@@ -217,7 +223,7 @@ namespace TreeGenerator
                 Vector3d rootVec = new Vector3d(0, 0, 0.5f);
                 foreach (Point3d p in seedPts)
                 {
-                    Agent a = new Agent((Vector3d)p, rootVec, r.Next((int)minLifeSpan, (int) maxLifeSpan));
+                    Agent a = new Agent((Vector3d)p, rootVec, r.Next((int)minLifeSpan, (int)maxLifeSpan));
                     a.parentId = 0;
                     sim.activeAgents.Add(a);
                     sim.geometry.SavePlane(new Plane((Point3d)a.loc, a.vel), a.id);
@@ -429,7 +435,7 @@ namespace TreeGenerator
                         {
                             foreach (Vector3d childVec in a.childVecs)
                             {
-                                Agent child = new Agent(a.loc, childVec, r.Next((int) minLifeSpan, (int) maxLifeSpan));
+                                Agent child = new Agent(a.loc, childVec, r.Next((int)minLifeSpan, (int)maxLifeSpan));
                                 child.parentId = a.id;
                                 geometry.SavePlane(new Plane((Point3d)child.loc, child.vel), child.id);
                                 activeAgents.Add(child);
@@ -594,9 +600,9 @@ namespace TreeGenerator
                 vel = initVec_;
                 id = agentCount;
                 agentCount++;
-                lifeSpan = (int) lifeSpan_;
+                lifeSpan = (int)lifeSpan_;
                 childVecs = new List<Vector3d>();
-                growthSpeed = 0.6;
+                growthSpeed = 1.0;
                 agentsCreated++;
             }
 
@@ -683,8 +689,9 @@ namespace TreeGenerator
                 double l = vec.Length;
                 if (l < separationMax && l > separationMin)
                 {
-                    double fallOff = Utility.ReMap(l, separationMin, separationMax, 1, 0);
+                    double fallOff = Utility.ReMap(l, separationMin, separationMax, 1, 0.0);
                     vel += vec * -1 * separationFactor * fallOff;
+                    if (vel.Z < 0) vel.Z = 0;
                 }
             }
 

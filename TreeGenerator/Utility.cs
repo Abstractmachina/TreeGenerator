@@ -3,12 +3,16 @@ using System.Collections.Generic;
 
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
+using Grasshopper.Kernel.Types;
 using Rhino.Geometry;
 
 namespace TreeGenerator
 {
     public static class Utility
     {
+
+        #region GH_Structures Utility
+
 
         /// <summary>
         /// Returns number of branches in the first dimension of a data tree.
@@ -64,6 +68,77 @@ namespace TreeGenerator
         }
 
         /// <summary>
+        ///
+        /// </summary>
+        /// <param name="paths"></param>
+        /// <returns></returns>
+        public static HashSet<int> GetMainBranches(IList<GH_Path> paths)
+        {
+            HashSet<int> mainBranches = new HashSet<int>();
+            foreach (GH_Path path in paths)
+            {
+                mainBranches.Add(path.Indices[0]);
+            }
+            return mainBranches;
+        }
+
+        public static HashSet<int> GetSecondaryBranches(IList<GH_Path> paths, int ofBranch)
+        {
+            HashSet<int> branches2d = new HashSet<int>();
+            foreach (GH_Path path in paths)
+            {
+                if (path.Indices[0] == ofBranch) branches2d.Add(path.Indices[1]);
+            }
+            return branches2d;
+        }
+
+
+        #endregion
+
+        #region Cast Utility
+
+        //----------------------------------------------- TO RHINO TYPES
+        public static Plane CastToPlane(GH_Plane p)
+        {
+            Plane pl = new Plane();
+            p.CastTo<Plane>(out pl);
+            return pl;
+        }
+
+        public static Point3d CastToPoint3d(GH_Point p)
+        {
+            Point3d p3d = new Point3d();
+            p.CastTo<Point3d>(out p3d);
+            return p3d;
+        }
+
+
+        //--------------------------------------------- FROM RHINO TYPES
+        public static GH_Curve CastFromCurve(Curve crv)
+        {
+            GH_Curve outcv = new GH_Curve();
+            outcv.CastFrom(crv);
+            return outcv;
+        }
+        public static GH_Curve CastFromPLine(Polyline crv)
+        {
+            GH_Curve outcv = new GH_Curve();
+            outcv.CastFrom(crv);
+            return outcv;
+        }
+
+        public static GH_Mesh CastFromMesh(Mesh m)
+        {
+            GH_Mesh outm = new GH_Mesh();
+            outm.CastFrom(m);
+            return outm;
+        }
+        #endregion
+
+
+
+        #region Math Utility
+        /// <summary>
         /// Remaps a domain.
         /// </summary>
         /// <param name="value"></param>
@@ -106,5 +181,6 @@ namespace TreeGenerator
             return random;
 
         }
+        #endregion
     }
 }

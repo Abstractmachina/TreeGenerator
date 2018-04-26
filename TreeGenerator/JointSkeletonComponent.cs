@@ -8,14 +8,11 @@ using Rhino.Geometry;
 
 namespace TreeGenerator
 {
-    public class JointExtractor : GH_Component
+    public class JointSkeleton : GH_Component
     {
-        /// <summary>
-        /// Initializes a new instance of the MyComponent1 class.
-        /// </summary>
-        public JointExtractor()
-          : base("Joint Extractor", "JoiE",
-              "Extracts joints from a branching structure.",
+        public JointSkeleton()
+          : base("Joint Skeleton", "JSkelet",
+              "Extracts skeleton for joints from a branching structure.",
               "Generative", "Fabrication")
         {
         }
