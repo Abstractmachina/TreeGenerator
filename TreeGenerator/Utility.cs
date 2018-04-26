@@ -114,12 +114,7 @@ namespace TreeGenerator
 
 
         //--------------------------------------------- FROM RHINO TYPES
-        public static GH_Curve CastFromCurve(Curve crv)
-        {
-            GH_Curve outcv = new GH_Curve();
-            outcv.CastFrom(crv);
-            return outcv;
-        }
+
         public static GH_Curve CastFromPLine(Polyline crv)
         {
             GH_Curve outcv = new GH_Curve();
@@ -127,12 +122,6 @@ namespace TreeGenerator
             return outcv;
         }
 
-        public static GH_Mesh CastFromMesh(Mesh m)
-        {
-            GH_Mesh outm = new GH_Mesh();
-            outm.CastFrom(m);
-            return outm;
-        }
         #endregion
 
 

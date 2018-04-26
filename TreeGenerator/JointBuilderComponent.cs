@@ -39,11 +39,13 @@ namespace TreeGenerator
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
-            pManager.AddCurveParameter("Tree as Curve", "CV", "Returns tree structure as curves", GH_ParamAccess.tree);
+            pManager.AddCurveParameter("Tree as Curve", "CV", "Returns tree structure skeleton as curves", GH_ParamAccess.tree);
             pManager.AddPlaneParameter("Printing Layers", "L", "Returns planes of printing layers", GH_ParamAccess.tree);
             pManager.AddPointParameter("Tree | Planes intersection", "CXP", "returns intersection events between tree and printing planes.", GH_ParamAccess.tree);
-            pManager.AddPointParameter("CXP Cleaned", "CCXP", "cleaned intersection without null items and empty branches.", GH_ParamAccess.tree);
-
+            pManager.AddMeshParameter("Slices as Mesh", "SLM", "Slices as Mesh objects.", GH_ParamAccess.tree);
+            pManager.AddCurveParameter("Slices as Curves", "SLC", "Slices as Curve Objects.", GH_ParamAccess.tree);
+            
+            //DEBUG
             pManager.AddTextParameter("Debug Log", "BUG", "Debug Log for development", GH_ParamAccess.list);
         }
 
@@ -80,13 +82,12 @@ namespace TreeGenerator
             DA.SetDataTree(0, builder.SkeletonLines);
             DA.SetDataTree(1, builder.LayerPlanes);
             DA.SetDataTree(2, builder.Intersections);
-            //DA.SetDataTree(3, cleanedIntersects);
-            DA.SetDataList(4, debugLog);
+            DA.SetDataTree(3, builder.PrintSlices_mesh);
+            DA.SetDataTree(4, builder.MeshBoundaries);
+            DA.SetDataList(5, debugLog);
         }
 
         
-
-
         /// <summary>
         /// Provides an Icon for the component.
         /// </summary>

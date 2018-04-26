@@ -17,7 +17,7 @@ namespace TreeGenerator
         private GH_Structure<GH_Plane> inputPlanes = new GH_Structure<GH_Plane>();
         //joint skeleton as curves
         private GH_Structure<GH_Curve> skeletonLines = new GH_Structure<GH_Curve>();
-        //parallel layerPlanes for printing
+        //parallel layerPlanes for printing Path[0] = joint
         private GH_Structure<GH_Plane> layerPlanes = new GH_Structure<GH_Plane>();
         //calc intersections between skeleton and layerPlanes
         private GH_Structure<GH_Point> intersections = new GH_Structure<GH_Point>();
@@ -37,6 +37,8 @@ namespace TreeGenerator
         private double gridY;
         private double layerHeight;
 
+        #region Properties
+
         public GH_Structure<GH_Plane> InputPlanes
         {
             get { return inputPlanes; }
@@ -53,7 +55,14 @@ namespace TreeGenerator
         {
             get { return intersections; }
         }
-
+        public GH_Structure<GH_Mesh> PrintSlices_mesh
+        {
+            get { return printSlices_mesh; }
+        }
+        public GH_Structure<GH_Curve> MeshBoundaries
+        {
+            get { return meshBoundaries; }
+        }
 
 
         public double Resolution
@@ -81,7 +90,7 @@ namespace TreeGenerator
             get { return layerHeight; }
             set { layerHeight = value; }
         }
-
+        #endregion
 
         public JointBuilder(GH_Structure<GH_Plane> inputPlanes_, double resolution_, double gridX_, double gridY_, double jointRadius_, double layerHeight_)
         {
@@ -101,40 +110,40 @@ namespace TreeGenerator
         }
 
         /// <summary>
-        /// Generates all geometry for printing.
+        /// Generates all geometry for printing. Main functional method.
         /// </summary>
         public void GeneratePrintLayers()
         {
             //calc curves
             skeletonLines = BuildStructureAsCurves();
-            //calc layers
+            //calc layers. this is for a parallel layers print, where layers dont follow normals.
             layerPlanes = BuildPrintLayerPlanes();
-            //calc intersections
-            intersections = CurvePlaneIntersect();
+            //calc intersections where skeleton meets print layer planes. 
+            intersections = FindCurvePlaneIntersect();
 
             //=================== todo code below not tested on multiple joints
             //calc grid
-            grid = BuildGrid(intersections, layerPlanes);
+            grid = BuildParallelGrid();
             //print slices returned as point grid
-            printSlices_points = BuildContourPoints(grid, intersections);
+            printSlices_points = BuildContourPoints();
 
             //build curves from mesh
-            printSlices_mesh = BuildMeshSlices(out meshBoundaries);
+            printSlices_mesh = BuildMeshSlices();
         }
 
 
 
         /// <summary>
-        /// 
+        /// Path[0] = joint; Path[1] = layer
         /// </summary>
         /// <param name="layers"></param>
         /// <param name="curves"></param>
         /// <returns></returns>
-        private GH_Structure<GH_Point> CurvePlaneIntersect()
+        private GH_Structure<GH_Point> FindCurvePlaneIntersect()
         {
             GH_Structure<GH_Point> intersections = new GH_Structure<GH_Point>();
 
-            for (int i = 0; i < Utility.GetMainBranchCount(skeletonLines.Paths); i++)
+            for (int i = 0; i < Utility.GetMainBranchCount(skeletonLines.Paths); i++) //only need to go as far as the last intersection
             {
                 int layerCount = 0; //increment per layer for each joint i
                 foreach (GH_Plane plane in layerPlanes.get_Branch(i))
@@ -251,72 +260,35 @@ namespace TreeGenerator
         //todo : below only tested in GH component for single joints. might need to restructure to work on all joints. 
 
 
-        private GH_Structure<GH_Mesh> BuildMeshSlices(out GH_Structure<GH_Curve> meshBoundaries)
-        {
-            GH_Structure<GH_Mesh> meshLayers = new GH_Structure<GH_Mesh>();
-            meshBoundaries = new GH_Structure<GH_Curve>();
+       
 
-            for (int i = 0; i < printSlices_points.PathCount; i++)
-            {
-                Mesh m = new Mesh();
-
-                Plane lp = Utility.CastToPlane(layerPlanes.get_DataItem(new GH_Path(0), i)); //get layerplane
-                int vertexCount = 0;
-                foreach (GH_Point pt in printSlices_points.get_Branch(i))
-                {
-                    Point3d pt3 = Utility.CastToPoint3d(pt);
-                    double halfRes = resolution / 2;
-                    Point3d v0 = pt3 + (lp.XAxis * halfRes) + (lp.YAxis * halfRes);
-                    Point3d v1 = pt3 + (lp.XAxis * halfRes) - (lp.YAxis * halfRes);
-                    Point3d v2 = pt3 - (lp.XAxis * halfRes) + (lp.YAxis * halfRes);
-                    Point3d v3 = pt3 - (lp.XAxis * halfRes) - (lp.YAxis * halfRes);
-
-                    m.Vertices.Add(v0);
-                    vertexCount++;
-                    m.Vertices.Add(v1);
-                    vertexCount++;
-                    m.Vertices.Add(v3);
-                    vertexCount++;
-                    m.Vertices.Add(v2);
-                    vertexCount++;
-
-                    MeshFace mf = new MeshFace(vertexCount - 4, vertexCount - 3, vertexCount - 2, vertexCount - 1);
-                    m.Faces.AddFace(mf);
-                }
-                meshLayers.Append(new GH_Mesh(m), new GH_Path(i));
-                var polylines = m.GetNakedEdges();
-                foreach (var polyline in polylines)
-                {
-                    GH_Curve pl = Utility.CastFromPLine(polyline);
-                    meshBoundaries.Append(pl, new GH_Path(i));
-                }
-
-            }
-
-            return meshLayers;
-        }
-
-        public GH_Structure<GH_Point> BuildGrid(GH_Structure<GH_Point> CXP, GH_Structure<GH_Plane> printLayers)
+        /// <summary>
+        /// Build a grid for finding print slices in a parallel print. Path[0] = joint; Path[1] = layer; Path[2] = column of points.
+        /// </summary>
+        /// <returns></returns>
+        public GH_Structure<GH_Point> BuildParallelGrid()
         {
             GH_Structure<GH_Point> grid = new GH_Structure<GH_Point>();
 
-            for (int i = 0; i < CXP.PathCount; i++)
+            for (int i = 0; i < Utility.GetMainBranchCount(intersections.Paths); i++) //iterate through each joint
             {
-                Plane pl = Utility.CastToPlane(printLayers.get_DataItem(new GH_Path(0), i));
-
-                for (int x = 0; x < numX; x++)
+                for (int j = 0; j < Utility.GetSecondaryBranchCount(intersections.Paths, i); j++) //j is iterating through planes, but using intersection layers, since there are unused ones.
                 {
-                    for (int y = 0; y < numY; y++)
+                    Plane pl = Utility.CastToPlane(layerPlanes.get_DataItem(new GH_Path(i), j));
+
+                    for (int x = 0; x < numX; x++)
                     {
-                        Point3d p = new Point3d(pl.Origin);
-                        Vector3d moveInGrid = new Vector3d();
-                        moveInGrid += ((pl.XAxis * gridX / 2 * -1) + (pl.XAxis * x * resolution)) + ((pl.YAxis * gridY / 2 * -1) + (pl.YAxis * y * resolution));
-                        p += moveInGrid;
-                        grid.Append(new GH_Point(p), new GH_Path(i, x));
+                        for (int y = 0; y < numY; y++)
+                        {
+                            Point3d p = new Point3d(pl.Origin);
+                            Vector3d moveInGrid = new Vector3d();
+                            moveInGrid += ((pl.XAxis * gridX / 2 * -1) + (pl.XAxis * x * resolution)) + ((pl.YAxis * gridY / 2 * -1) + (pl.YAxis * y * resolution));
+                            p += moveInGrid;
+                            grid.Append(new GH_Point(p), new GH_Path(i, j, x));
+                        }
                     }
                 }
             }
-
             return grid;
         }
 
@@ -354,36 +326,45 @@ namespace TreeGenerator
         //    return contours;
         //}
 
-        public GH_Structure<GH_Point> BuildContourPoints(GH_Structure<GH_Point> grid, GH_Structure<GH_Point> CXP)
+            /// <summary>
+            /// build print slices as points. Path[0] = Joints; Path[1] = layers.
+            /// </summary>
+            /// <param name="grid"></param>
+            /// <param name="CXP"></param>
+            /// <returns></returns>
+        private GH_Structure<GH_Point> BuildContourPoints()
         {
-            GH_Structure<GH_Point> contours = new GH_Structure<GH_Point>();
+            GH_Structure<GH_Point> contourPoints = new GH_Structure<GH_Point>();
 
-            for (int i = 0; i < Utility.GetMainBranchCount(grid.Paths); i++)
+            for (int i = 0; i < Utility.GetMainBranchCount(grid.Paths); i++) //joint
             {
-                for (int j = 0; j < Utility.GetSecondaryBranchCount(grid.Paths, i); j++)
+                for (int j = 0; j < Utility.GetSecondaryBranchCount(grid.Paths, i); j++) //layer
                 {
-                    GH_Path pth = new GH_Path(i, j);
-                    for (int k = 0; k < grid.get_Branch(pth).Count; k++)
+                    for (int k = 0; k < Utility.GetTertiaryBranchCount(grid.Paths, i, j); k++) //column
                     {
-                        bool isUnique = true;
-                        foreach (GH_Point intersect in CXP.get_Branch(new GH_Path(0, i)))
+                        GH_Path pth = new GH_Path(i, j, k);
+                        for (int l = 0; l < grid.get_Branch(pth).Count; l++)
                         {
-                            Point3d intPt = Utility.CastToPoint3d(intersect);
-                            Point3d p = Utility.CastToPoint3d(grid.get_DataItem(pth, k));
-                            double resolution = (p - intPt).Length;
-                            if (isUnique)
+                            bool isUnique = true;
+                            foreach (GH_Point intersect in intersections.get_Branch(new GH_Path(i, j)))
                             {
-                                if (resolution < jointRadius)
+                                Point3d intPt = Utility.CastToPoint3d(intersect);
+                                Point3d p = Utility.CastToPoint3d(grid.get_DataItem(pth, l));
+                                double distToCenter = (p - intPt).Length;
+                                if (isUnique)
                                 {
-                                    isUnique = false; //the next time it triggers for another intersect, its not unique anymore
-                                    contours.Append(grid.get_DataItem(new GH_Path(i, j),k), new GH_Path(i));
+                                    if (distToCenter < jointRadius)
+                                    {
+                                        isUnique = false; //the next time it triggers for another intersect, its not unique anymore
+                                        contourPoints.Append(grid.get_DataItem(pth, l), new GH_Path(i, j));
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-            return contours;
+            return contourPoints;
         }
 
         ///// <summary>
@@ -415,6 +396,61 @@ namespace TreeGenerator
         //    return curves;
         //}
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        private GH_Structure<GH_Mesh> BuildMeshSlices()
+        {
+            GH_Structure<GH_Mesh> meshLayers = new GH_Structure<GH_Mesh>();
+            meshBoundaries = new GH_Structure<GH_Curve>();
+
+            for (int i = 0; i < Utility.GetMainBranchCount(printSlices_points.Paths); i++) //joint
+            {
+                Plane lp = Utility.CastToPlane(layerPlanes.get_DataItem(new GH_Path(i), 0)); //get first layerplane of each joint
+                for (int j = 0; j < Utility.GetSecondaryBranchCount(printSlices_points.Paths, i); j++) //layer
+                {
+                    Mesh m = new Mesh();
+
+                    GH_Path pth = new GH_Path(i, j);
+
+                    int vertexCount = 0;
+                    foreach (GH_Point pt in printSlices_points.get_Branch(pth))
+                    {
+                        Point3d pt3 = Utility.CastToPoint3d(pt);
+                        double halfRes = resolution / 2;
+                        Point3d v0 = pt3 + (lp.XAxis * halfRes) + (lp.YAxis * halfRes);
+                        Point3d v1 = pt3 + (lp.XAxis * halfRes) - (lp.YAxis * halfRes);
+                        Point3d v2 = pt3 - (lp.XAxis * halfRes) + (lp.YAxis * halfRes);
+                        Point3d v3 = pt3 - (lp.XAxis * halfRes) - (lp.YAxis * halfRes);
+
+                        m.Vertices.Add(v0);
+                        vertexCount++;
+                        m.Vertices.Add(v1);
+                        vertexCount++;
+                        m.Vertices.Add(v3);
+                        vertexCount++;
+                        m.Vertices.Add(v2);
+                        vertexCount++;
+
+                        MeshFace mf = new MeshFace(vertexCount - 4, vertexCount - 3, vertexCount - 2, vertexCount - 1);
+                        m.Faces.AddFace(mf);
+                    }
+                    meshLayers.Append(new GH_Mesh(m), pth);
+                    var polylines = m.GetNakedEdges();
+                    foreach (var polyline in polylines)
+                    {
+                        GH_Curve pl = Utility.CastFromPLine(polyline);
+                        meshBoundaries.Append(pl, pth);
+                    }
+                }
+
+            }
+
+            return meshLayers;
+        }
+
     }
 
+    
 }
