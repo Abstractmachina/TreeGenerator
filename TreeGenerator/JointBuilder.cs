@@ -13,7 +13,17 @@ namespace TreeGenerator
 {
     class JointBuilder
     {
+        /***
+         * 
+         * NOTES:
+         * todo consider changing point grids to vector grids. may be more efficient. 
+         * very heavy script. how to make it faster?
+         * 3 joints at layerheight 2 and res 2 is ok. 
+         * 
+         * */
 
+
+        //initial input planes
         private GH_Structure<GH_Plane> inputPlanes = new GH_Structure<GH_Plane>();
         //joint skeleton as curves
         private GH_Structure<GH_Curve> skeletonLines = new GH_Structure<GH_Curve>();
@@ -22,7 +32,7 @@ namespace TreeGenerator
         //calc intersections between skeleton and layerPlanes
         private GH_Structure<GH_Point> intersections = new GH_Structure<GH_Point>();
         //3d grid for joint
-        private GH_Structure<GH_Point> grid = new GH_Structure<GH_Point>();
+        private GH_Structure<GH_Point> grid = new GH_Structure<GH_Point>(); //todo simplify tree structure. 3rd dimension not needed.
         //print slices returned as point grid
         private GH_Structure<GH_Point> printSlices_points = new GH_Structure<GH_Point>();
         //print slices returned as meshes
@@ -120,8 +130,6 @@ namespace TreeGenerator
             layerPlanes = BuildPrintLayerPlanes();
             //calc intersections where skeleton meets print layer planes. 
             intersections = FindCurvePlaneIntersect();
-
-            //=================== todo code below not tested on multiple joints
             //calc grid
             grid = BuildParallelGrid();
             //print slices returned as point grid
@@ -130,8 +138,6 @@ namespace TreeGenerator
             //build curves from mesh
             printSlices_mesh = BuildMeshSlices();
         }
-
-
 
         /// <summary>
         /// Path[0] = joint; Path[1] = layer
