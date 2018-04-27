@@ -223,10 +223,11 @@ namespace TreeGenerator
                 Vector3d rootVec = new Vector3d(0, 0, 0.5f);
                 foreach (Point3d p in seedPts)
                 {
-                    Agent a = new Agent((Vector3d)p, rootVec, r.Next((int)minLifeSpan, (int)maxLifeSpan));
+                    Agent a = new Agent((Vector3d) p, rootVec, r.Next((int)minLifeSpan, (int)maxLifeSpan));
                     a.parentId = 0;
+                    a.up = Vector3d.YAxis;
                     sim.activeAgents.Add(a);
-                    sim.geometry.SavePlane(new Plane((Point3d)a.loc, a.vel), a.id);
+                    sim.geometry.SavePlane(new Plane((Point3d) a.loc, a.vel), a.id);
                 }
             }
 
@@ -248,7 +249,7 @@ namespace TreeGenerator
             {
                 CheckforDeadAgents();
                 ProcessGlobalRepulsion();
-                ProcessGlobalFusion();// TODO fix fusion. does not work at all.
+                //ProcessGlobalFusion();// TODO fix fusion. does not work at all.
                 boundaryLineOfSight.Clear();
                 foreach (Agent a in activeAgents)
                 {
@@ -270,7 +271,7 @@ namespace TreeGenerator
                 {
                     for (int j = 0; j < activeAgents.Count; j++)
                     {
-                        if (i != j) activeAgents[i].Separate(activeAgents[j].loc);
+                        if (i != j) activeAgents[i].Separate((Vector3d) activeAgents[j].loc);
                     }
                 }
             }
@@ -357,7 +358,7 @@ namespace TreeGenerator
                             {
                                 Plane p = new Plane();
                                 plane.CastTo<Plane>(out p);
-                                double dist = ((Vector3d)p.Origin - a.loc).Length;
+                                double dist = ((Vector3d) p.Origin - a.loc).Length;
                                 if (dist < fuseThreshold)
                                 {
                                     a.DieChildLess();
@@ -429,15 +430,16 @@ namespace TreeGenerator
                     Agent a = activeAgents[i];
                     if (a.isDead)
                     {
-                        geometry.SavePlane(new Plane((Point3d)a.loc, a.vel), a.id);
+                        
+                        geometry.SavePlane(new Plane((Point3d) a.loc, a.vel), a.id);
                         deadAgentCount++;
-                        if (a.childVecs.Count != 0) //if its possible to have children, i.e. it died of old age
+                        if (a.children.Count != 0) //if its possible to have children, i.e. it died of old age
                         {
-                            foreach (Vector3d childVec in a.childVecs)
+                            foreach (Plane childData in a.children)
                             {
-                                Agent child = new Agent(a.loc, childVec, r.Next((int)minLifeSpan, (int)maxLifeSpan));
+                                Agent child = new Agent(a.loc, childData.ZAxis, r.Next((int)minLifeSpan, (int)maxLifeSpan));
                                 child.parentId = a.id;
-                                geometry.SavePlane(new Plane((Point3d)child.loc, child.vel), child.id);
+                                geometry.SavePlane(new Plane((Point3d) child.loc, child.vel), child.id);
                                 activeAgents.Add(child);
                             }
                         }
@@ -510,7 +512,7 @@ namespace TreeGenerator
                 {
                     foreach (Agent a in agents)
                     {
-                        Plane p = new Plane((Point3d)a.loc, a.vel);
+                        Plane p = new Plane((Point3d) a.loc, a.vel);
                         SavePlane(p, a.id);
                     }
                 }
@@ -572,8 +574,9 @@ namespace TreeGenerator
             public Vector3d loc;
             public Vector3d vel;
             public Vector3d accel;
+            public Vector3d up;
 
-            public List<Vector3d> childVecs;
+            public List<Plane> children;
 
 
             public int id;
@@ -598,10 +601,11 @@ namespace TreeGenerator
 
                 loc = loc_;
                 vel = initVec_;
+
                 id = agentCount;
                 agentCount++;
                 lifeSpan = (int)lifeSpan_;
-                childVecs = new List<Vector3d>();
+                children = new List<Plane>();
                 growthSpeed = 1.0;
                 agentsCreated++;
             }
@@ -634,11 +638,21 @@ namespace TreeGenerator
                     double angleRad = Utility.DegToRad(angle);
                     for (int i = 0; i < numberOfNewChildren; i++)
                     {
-                        Vector3d childVec = vel; //initVector same as dying parent
-                        childVec.Transform(Rhino.Geometry.Transform.Rotation(angleRad, new Vector3d(0, 1, 0), (Point3d)loc)); //rotate in elevation
-                        childVec.Transform(Rhino.Geometry.Transform.Rotation(Utility.DegToRad(120) * i, vel, (Point3d)loc)); //rotate in normal randomly
+                        Vector3d childNormal = vel;
+                        Vector3d childUp = up;
+                        //child.ZAxis = vel; //initVector same as dying parent
+                        childNormal.Transform(Rhino.Geometry.Transform.Rotation(angleRad, new Vector3d(0, 1, 0), (Point3d) loc)); //rotate in elevation
+                        childNormal.Transform(Rhino.Geometry.Transform.Rotation(Utility.DegToRad(120) * i, vel, (Point3d) loc)); //rotate in normal randomly
 
-                        childVecs.Add(childVec); //add to list of childs
+                        childUp.Transform(Rhino.Geometry.Transform.Rotation(angleRad, new Vector3d(1, 0, 0), (Point3d)loc)); //rotate in elevation
+                        childUp.Transform(Rhino.Geometry.Transform.Rotation(Utility.DegToRad(120) * i, vel, (Point3d)loc)); //rotate in normal randomly
+
+                        Vector3d childX = Rhino.Geometry.Vector3d.CrossProduct(childUp, childNormal);
+
+                        Plane child = new Plane((Point3d)loc, childX, childUp);
+                        //Plane child = new Plane((Point3d) loc, childNormal);
+
+                        children.Add(child); //add to list of childs
                     }
                     canBranch = false; //after branching once, it cannot branch again.
                 }
@@ -664,9 +678,9 @@ namespace TreeGenerator
             private void CheckBoundaryCollision()
             {
 
-                Vector3d closestPoint = (Vector3d)boundary.ClosestPoint((Point3d)loc);
-                double dist = (closestPoint - loc).Length;
-                Line l = new Line((Point3d)closestPoint, (Point3d)loc);
+                Vector3d closestPoint = (Vector3d) boundary.ClosestPoint((Point3d) loc);
+                double dist = (closestPoint -  loc).Length;
+                Line l = new Line((Point3d)closestPoint, (Point3d) loc);
                 boundaryLineOfSight.Add(l);
 
                 if (dist <= collisionTriggerDistance)
@@ -677,7 +691,7 @@ namespace TreeGenerator
 
                     if (dist != 0)
                     {
-                        loc = (Vector3d)closestPoint;
+                        loc = closestPoint;
                     }
                 }
             }
@@ -691,20 +705,10 @@ namespace TreeGenerator
                 {
                     double fallOff = Utility.ReMap(l, separationMin, separationMax, 1, 0.0);
                     vel += vec * -1 * separationFactor * fallOff;
-                    if (vel.Z < 0) vel.Z = 0;
+                    if (vel.Z < 0) vel.Z = 0; //constrain in z => cannot move downwards.
                 }
             }
-
-
-            //GETTERS SETTERS
-            public List<Vector3d> getChildVectors() { return childVecs; }
-
-            public void SetID(int ID) { id = ID; }
-
-            public void SetAge(int age_) { age = age_; }
-            public int GetAge() { return age; }
         }
-
 
 
 
