@@ -8,14 +8,14 @@ using Rhino.Geometry;
 
 namespace TreeGenerator
 {
-    public class JointBuilderComponent : GH_Component
+    public class NodeBuilder2Component : GH_Component
     {
         /// <summary>
         /// Initializes a new instance of the JointBuilderComponent class.
         /// </summary>
-        public JointBuilderComponent()
-          : base("Joint Builder", "JoiB",
-              "Builds a 3d-printable joint",
+        public NodeBuilder2Component()
+          : base("Node Builder CRV", "NBldrCRV",
+              "Builds a 3d-printable node from Node Skeleton CRV",
               "Generative", "Fabrication")
         {
         }
@@ -25,12 +25,12 @@ namespace TreeGenerator
         /// </summary>
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
-            pManager.AddPlaneParameter("Joint Planes", "JOI", "Joints from Joint Extractor Component.", GH_ParamAccess.tree);
+            pManager.AddCurveParameter("Node Skeleton", "NS", "Nodes from Node Skeleton Component.", GH_ParamAccess.tree);
             pManager.AddNumberParameter("Layer Height", "H", "Layer height for printing", GH_ParamAccess.item, 5d);
             pManager.AddNumberParameter("Grid Resolution", "RES", "Resolution of builder grid", GH_ParamAccess.item, 2d);
             pManager.AddNumberParameter("Grid Width", "XDIM", "Width of builder grid", GH_ParamAccess.item, 200d);
             pManager.AddNumberParameter("Grid Depth", "YDIM", "Depth of builder grid", GH_ParamAccess.item, 200d);
-            pManager.AddNumberParameter("Joint Radius", "JR", "Radious of resulting joint.", GH_ParamAccess.item, 15d);
+            pManager.AddNumberParameter("Node Radius", "JR", "Radius of resulting node.", GH_ParamAccess.item, 15d);
 
         }
 
@@ -40,7 +40,7 @@ namespace TreeGenerator
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
             pManager.AddMeshParameter("Slices as Mesh", "SLM", "Slices as Mesh objects.", GH_ParamAccess.tree);
-
+            
             //DEBUG
             pManager.AddTextParameter("Debug Log", "BUG", "Debug Log for development", GH_ParamAccess.list);
         }
@@ -54,29 +54,30 @@ namespace TreeGenerator
         protected override void SolveInstance(IGH_DataAccess DA)
         {
 
-            JointBuilder builder;
+            NodeBuilder builder;
             debugLog = new List<string>();
             //input
-            GH_Structure<GH_Plane> inputPlanes = new GH_Structure<GH_Plane>();
+            GH_Structure<GH_Curve> inputCurves = new GH_Structure<GH_Curve>();
             double layerHeight = 0;
             double resolution = 0;
             double xDim = 0;
             double yDim = 0;
             double radius = 0;
-            if (!DA.GetDataTree(0, out inputPlanes)) return;
+            if (!DA.GetDataTree(0, out inputCurves)) return;
             if (!DA.GetData(1, ref layerHeight)) return;
             if (!DA.GetData(2, ref resolution)) return;
             if (!DA.GetData(3, ref xDim)) return;
             if (!DA.GetData(4, ref yDim)) return;
             if (!DA.GetData(5, ref radius)) return;
 
-            builder = new JointBuilder(inputPlanes, resolution, xDim, yDim, radius, layerHeight);
+            builder = new NodeBuilder(inputCurves, resolution, xDim, yDim, radius, layerHeight);
 
             builder.GeneratePrintLayers();
 
             //output
             DA.SetDataTree(0, builder.PrintSlices_mesh);
-            DA.SetDataList(1, builder.debugLog);
+            
+            DA.SetDataList(1, builder.DebugLog);
         }
 
 
@@ -98,7 +99,7 @@ namespace TreeGenerator
         /// </summary>
         public override Guid ComponentGuid
         {
-            get { return new Guid("0c97c1f4-f8c7-4eda-a932-a5d062cf263f"); }
+            get { return new Guid("06b5cb96-0e9c-4714-b439-c802d1489b2c"); }
         }
     }
 }

@@ -8,11 +8,11 @@ using Rhino.Geometry;
 
 namespace TreeGenerator
 {
-    public class JointSkeleton : GH_Component
+    public class NodeSkeletonComponent : GH_Component
     {
-        public JointSkeleton()
-          : base("Joint Skeleton", "JSkelet",
-              "Extracts skeleton for joints from a branching structure.",
+        public NodeSkeletonComponent()
+          : base("Node Skeleton", "JSkelet",
+              "Extracts skeleton for nodes from a branching structure.",
               "Generative", "Fabrication")
         {
         }
@@ -23,8 +23,8 @@ namespace TreeGenerator
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
             pManager.AddPlaneParameter("Tree Planes", "TrPl", "planes describing the structure of a tree, ordered into two dimensional datatrees ( e.g. branch{0}, branch {1} etc).", GH_ParamAccess.tree);
-            pManager.AddNumberParameter("Trim Length Base", "TrimB", "Length of joint base", GH_ParamAccess.item, 5d);
-            pManager.AddNumberParameter("Trim Length Top", "TrimT", "Length of joint tops", GH_ParamAccess.item, 5d);
+            pManager.AddNumberParameter("Trim Length Base", "TrimB", "Length of node base", GH_ParamAccess.item, 5d);
+            pManager.AddNumberParameter("Trim Length Top", "TrimT", "Length of node tops", GH_ParamAccess.item, 5d);
         }
 
         /// <summary>
@@ -33,8 +33,8 @@ namespace TreeGenerator
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
 
-            pManager.AddPlaneParameter("Untrimmed Joints", "UT", "Returns all joints as untrimmed list of joints.", GH_ParamAccess.tree);
-            pManager.AddPlaneParameter("Trimmed Joints", "TT", "Returns all joints based on trim specifications.", GH_ParamAccess.tree);
+            pManager.AddPlaneParameter("Untrimmed nodes", "UT", "Returns all nodes as untrimmed list of nodes.", GH_ParamAccess.tree);
+            pManager.AddPlaneParameter("Trimmed nodes", "TT", "Returns all nodes based on trim specifications.", GH_ParamAccess.tree);
             pManager.AddPlaneParameter("Stems", "S", "Returns stems based on trim specifications", GH_ParamAccess.tree);
             
 
@@ -59,34 +59,34 @@ namespace TreeGenerator
             int trimLengthBase = (int)t1;
             int trimLengthTop = (int)t2;
 
-            //find joints
-            List<List<List<GH_Plane>>> jointsList = ExtractJoints(planes, trimLengthTop);
+            //find nodes
+            List<List<List<GH_Plane>>> nodesList = ExtractNodes(planes, trimLengthTop);
 
-            //trim joints
-            List<List<List<GH_Plane>>> trimmedJointsList = TrimJoints(jointsList, trimLengthBase, trimLengthTop);
+            //trim nodes
+            List<List<List<GH_Plane>>> trimmedNodesList = TrimNodes(nodesList, trimLengthBase, trimLengthTop);
 
             //find stems
             GH_Structure<GH_Plane> stems = ExtractStems(planes, trimLengthBase, trimLengthTop);
 
             //convert to datatree
-            GH_Structure<GH_Plane> untrimmedJointsTree = ConvertListToTree(jointsList);
-            GH_Structure<GH_Plane> trimmedJointsTree = ConvertListToTree(trimmedJointsList);
+            GH_Structure<GH_Plane> untrimmedNodesTree = ConvertListToTree(nodesList);
+            GH_Structure<GH_Plane> trimmedNodesTree = ConvertListToTree(trimmedNodesList);
 
             //output
-            DA.SetDataTree(0, untrimmedJointsTree);
-            DA.SetDataTree(1, trimmedJointsTree);
+            DA.SetDataTree(0, untrimmedNodesTree);
+            DA.SetDataTree(1, trimmedNodesTree);
             DA.SetDataTree(2, stems);
         }
 
         /// <summary>
-        /// Extract joints from a tree structure with a flat hierarchy. 
+        /// Extract nodes from a tree structure with a flat hierarchy. 
         /// </summary>
         /// <param name="planes"></param>
         /// <param name="trimLengthTop"></param>
         /// <returns></returns>
-        private List<List<List<GH_Plane>>> ExtractJoints(GH_Structure<GH_Plane> planes, int trimLengthTop)
+        private List<List<List<GH_Plane>>> ExtractNodes(GH_Structure<GH_Plane> planes, int trimLengthTop)
         {
-            List<List<List<GH_Plane>>> jointsList = new List<List<List<GH_Plane>>>(); //3dimensional list to preserve data structure internally
+            List<List<List<GH_Plane>>> nodesList = new List<List<List<GH_Plane>>>(); //3dimensional list to preserve data structure internally
 
             for (int i = 0; i < planes.PathCount; i++)
             {
@@ -113,10 +113,10 @@ namespace TreeGenerator
                     }
                 }
 
-                if (members.Count > 1) //if joint is actually a joint that has more than just a base
+                if (members.Count > 1) //if node is actually a node that has more than just a base
                 {
                     //check if members have enough planes.
-                    //e.g. if a member has only 1 plane, it is not enough to build a joint.
+                    //e.g. if a member has only 1 plane, it is not enough to build a node.
                     bool enoughPlanes = true;
                     for (int k = 0; k < members.Count; k++)
                     {
@@ -126,36 +126,36 @@ namespace TreeGenerator
                             break;
                         }
                     }
-                    if (enoughPlanes) jointsList.Add(members);
+                    if (enoughPlanes) nodesList.Add(members);
                 }
             }
-            return jointsList;
+            return nodesList;
         }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="jointsList"></param>
+        /// <param name="nodesList"></param>
         /// <param name="trimLengthBase"></param>
         /// <param name="trimLengthTop"></param>
         /// <returns></returns>
-        private List<List<List<GH_Plane>>> TrimJoints(List<List<List<GH_Plane>>> jointsList, int trimLengthBase, int trimLengthTop)
+        private List<List<List<GH_Plane>>> TrimNodes(List<List<List<GH_Plane>>> nodesList, int trimLengthBase, int trimLengthTop)
         {
-            List<List<List<GH_Plane>>> trimmedJointsList = new List<List<List<GH_Plane>>>();
+            List<List<List<GH_Plane>>> trimmedNodesList = new List<List<List<GH_Plane>>>();
 
-            for (int i = 0; i < jointsList.Count; i++)
+            for (int i = 0; i < nodesList.Count; i++)
             {
-                List<List<GH_Plane>> trimmedJoint = new List<List<GH_Plane>>();
+                List<List<GH_Plane>> trimmedNode = new List<List<GH_Plane>>();
 
-                for (int j = 0; j < jointsList[i].Count; j++)
+                for (int j = 0; j < nodesList[i].Count; j++)
                 {
 
                     List<GH_Plane> trimmedMember = new List<GH_Plane>();
                     if (j == 0)
                     {
-                        for (int k = (jointsList[i][j].Count - trimLengthBase); k < jointsList[i][j].Count; k++)
+                        for (int k = (nodesList[i][j].Count - trimLengthBase); k < nodesList[i][j].Count; k++)
                         {
-                            GH_Plane p = jointsList[i][j][k];
+                            GH_Plane p = nodesList[i][j][k];
                             trimmedMember.Add(p);
                         }
                     }
@@ -163,16 +163,16 @@ namespace TreeGenerator
                     {
                         for (int k = 0; k < trimLengthTop; k++)
                         {
-                            GH_Plane p = jointsList[i][j][k];
+                            GH_Plane p = nodesList[i][j][k];
                             trimmedMember.Add(p);
                         }
                     }
-                    trimmedJoint.Add(trimmedMember);
+                    trimmedNode.Add(trimmedMember);
                 }
-                trimmedJointsList.Add(trimmedJoint);
+                trimmedNodesList.Add(trimmedNode);
             }
 
-            return trimmedJointsList;
+            return trimmedNodesList;
         }
 
         /// <summary>

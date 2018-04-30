@@ -112,6 +112,13 @@ namespace TreeGenerator
             return p3d;
         }
 
+        public static Curve CastToCurve(GH_Curve c)
+        {
+            Curve crv;
+            c.CastTo<Curve>(out crv);
+            return crv;
+        }
+
 
         //--------------------------------------------- FROM RHINO TYPES
 
